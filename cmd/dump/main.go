@@ -25,6 +25,8 @@ import (
 
 	"github.com/bnb-chain/node/app"
 	nodetypes "github.com/bnb-chain/node/common/types"
+	"github.com/bnb-chain/node/plugins/tokens/swap"
+	staketypes "github.com/cosmos/cosmos-sdk/x/stake/types"
 
 	mt "github.com/txaty/go-merkletree"
 
@@ -64,20 +66,48 @@ func (node *leafNode) Print() string {
 // ExportAccountsBalanceWithProof exports blockchain world state to json.
 func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) (err error) {
 	ctx := app.NewContext(sdk.RunTxModeCheck, abci.Header{})
+	ccDelegationCounter := 0
+	stakingKeeper := app.GetStakingKeeper()
+	sideChainCtx := ctx.WithSideChainKeyPrefix(stakingKeeper.ScKeeper.GetSideChainStorePrefix(ctx, stakingKeeper.ScKeeper.BscSideChainId(ctx)))
+	iterator := stakingKeeper.IteratorAllDelegations(sideChainCtx)
+	for ; iterator.Valid(); iterator.Next() {
+		delegation := staketypes.MustUnmarshalDelegation(stakingKeeper.CDC(), iterator.Key(), iterator.Value())
+		if delegation.CrossStake {
+			ccDelegationCounter++
+			trace("delegation:", fmt.Sprintf("%+v", delegation))
+		}
+	}
+	iterator.Close()
+	trace("cross-chain delegationCounter:", ccDelegationCounter)
 
+	swapStatus := map[swap.SwapStatus]int{}
+	swapKeeper := app.GetSwapKeeper()
+	swapIterator := swapKeeper.GetSwapIterator(ctx)
+	for ; swapIterator.Valid(); swapIterator.Next() {
+		var automaticSwap swap.AtomicSwap
+		swapKeeper.CDC().MustUnmarshalBinaryBare(swapIterator.Value(), &automaticSwap)
+		swapStatus[automaticSwap.Status]++
+	}
+	swapIterator.Close()
+	trace("swap status:", fmt.Sprintf("%+v", swapStatus))
+
+	ccTokenCounter := 0
 	allowedTokens := make(map[string]struct{})
 	tokens := app.TokenMapper.GetTokenList(ctx, false, true)
 	for _, token := range tokens {
 		if token.GetContractAddress() != "" {
 			allowedTokens[token.GetSymbol()] = struct{}{}
+			ccTokenCounter++
+			trace("cross-chain token:", fmt.Sprintf("%+v", token))
 		}
 	}
 	allowedTokens["BNB"] = struct{}{}
+	trace("cross-chain tokenCounter:", ccTokenCounter)
 
 	// iterate to get the accounts
 	accounts := []*types.ExportedAccount{}
 	mtData := []mt.DataBlock{}
-
+	accCounter := 0
 	appendAccount := func(acc sdk.Account) (stop bool) {
 		namedAcc := acc.(nodetypes.NamedAccount)
 		addr := namedAcc.GetAddress()
@@ -110,7 +140,7 @@ func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) 
 		}
 
 		trace("address", acc.GetAddress(), "account:", account)
-
+		accCounter++
 		return false
 	}
 
