@@ -67,6 +67,7 @@ func (node *leafNode) Print() string {
 func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) (err error) {
 	ctx := app.NewContext(sdk.RunTxModeCheck, abci.Header{})
 	ccDelegationCounter := 0
+	bcDelegationOnBSCCounter := 0
 	stakingKeeper := app.GetStakingKeeper()
 	sideChainCtx := ctx.WithSideChainKeyPrefix(stakingKeeper.ScKeeper.GetSideChainStorePrefix(ctx, stakingKeeper.ScKeeper.BscSideChainId(ctx)))
 	iterator := stakingKeeper.IteratorAllDelegations(sideChainCtx)
@@ -74,11 +75,14 @@ func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) 
 		delegation := staketypes.MustUnmarshalDelegation(stakingKeeper.CDC(), iterator.Key(), iterator.Value())
 		if delegation.CrossStake {
 			ccDelegationCounter++
-			trace("delegation:", fmt.Sprintf("%+v", delegation))
+			trace("cross-chain delegation:", fmt.Sprintf("%+v", delegation))
 		}
+		bcDelegationOnBSCCounter++
+		trace("bc delegation:", fmt.Sprintf("%+v", delegation))
 	}
 	iterator.Close()
 	trace("cross-chain delegationCounter:", ccDelegationCounter)
+	trace("bc->bsc delegationCounter:", bcDelegationOnBSCCounter)
 
 	swapStatus := map[swap.SwapStatus]int{}
 	swapKeeper := app.GetSwapKeeper()
