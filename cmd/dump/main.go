@@ -334,8 +334,8 @@ func ExportCmd(ctx *server.Context, cdc *codec.Codec) *cobra.Command {
 				return nil
 			}
 
-			sdkConfig := sdk.GetConfig()
-			sdkConfig.SetBech32PrefixForAccount(accPrefix, "bnbp")
+			// sdkConfig := sdk.GetConfig()
+			// sdkConfig.SetBech32PrefixForAccount(accPrefix, "bnbp")
 
 			db, err := openDB(home)
 			if err != nil {
