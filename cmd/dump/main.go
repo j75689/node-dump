@@ -63,14 +63,32 @@ func (node *leafNode) Print() string {
 	return "0x" + common.Bytes2Hex(crypto.Keccak256(buf))
 }
 
+func delegationTitle() string {
+	return "delegator validator shares height crossStake"
+}
+
+func formatDelegation(delegation staketypes.Delegation) string {
+	return fmt.Sprintf("%s %s %s %d %t",
+		delegation.DelegatorAddr.String(),
+		delegation.ValidatorAddr.String(),
+		delegation.Shares.String(),
+		delegation.Height,
+		delegation.CrossStake,
+	)
+}
+
 // ExportAccountsBalanceWithProof exports blockchain world state to json.
 func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) (err error) {
+	sdkConfig := sdk.GetConfig()
+	sdkConfig.SetBech32PrefixForAccount(accPrefix, "bnbp")
+
 	ctx := app.NewContext(sdk.RunTxModeCheck, abci.Header{})
 	ccDelegationCounter := 0
 	bcDelegationOnBSCCounter := 0
 	stakingKeeper := app.GetStakingKeeper()
 	sideChainCtx := ctx.WithSideChainKeyPrefix(stakingKeeper.ScKeeper.GetSideChainStorePrefix(ctx, stakingKeeper.ScKeeper.BscSideChainId(ctx)))
 	iterator := stakingKeeper.IteratorAllDelegations(sideChainCtx)
+	fmt.Println(delegationTitle())
 	for ; iterator.Valid(); iterator.Next() {
 		delegation := staketypes.MustUnmarshalDelegation(stakingKeeper.CDC(), iterator.Key(), iterator.Value())
 		if delegation.CrossStake {
@@ -79,10 +97,14 @@ func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) 
 		}
 		bcDelegationOnBSCCounter++
 		trace("bc delegation:", fmt.Sprintf("%+v", delegation))
+		fmt.Println(formatDelegation(delegation))
 	}
 	iterator.Close()
 	trace("cross-chain delegationCounter:", ccDelegationCounter)
 	trace("bc->bsc delegationCounter:", bcDelegationOnBSCCounter)
+	if flagOnlyDelegation {
+		return nil
+	}
 
 	swapStatus := map[swap.SwapStatus]int{}
 	swapKeeper := app.GetSwapKeeper()
@@ -372,7 +394,9 @@ func trace(a ...any) {
 
 var (
 	// TraceLog is a flag to print out full stack trace on errors
-	traceLog = false
+	traceLog           = false
+	flagOnlyDelegation = false
+	accPrefix          = "bnb"
 )
 
 func main() {
@@ -387,6 +411,8 @@ func main() {
 
 	rootCmd.AddCommand(ExportCmd(ctx.ToCosmosServerCtx(), cdc))
 	rootCmd.PersistentFlags().BoolVar(&traceLog, "tracelog", false, "print out full stack trace on errors")
+	rootCmd.PersistentFlags().BoolVar(&flagOnlyDelegation, "only_delegation", false, "only dump delegation")
+	rootCmd.PersistentFlags().StringVar(&accPrefix, "acc_prefix", "bnb", "account prefix")
 	// prepare and add flags
 	executor := cli.PrepareBaseCmd(rootCmd, "BC", app.DefaultNodeHome)
 	err := executor.Execute()
