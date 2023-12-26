@@ -79,9 +79,6 @@ func formatDelegation(delegation staketypes.Delegation) string {
 
 // ExportAccountsBalanceWithProof exports blockchain world state to json.
 func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) (err error) {
-	sdkConfig := sdk.GetConfig()
-	sdkConfig.SetBech32PrefixForAccount(accPrefix, "bnbp")
-
 	ctx := app.NewContext(sdk.RunTxModeCheck, abci.Header{})
 	ccDelegationCounter := 0
 	bcDelegationOnBSCCounter := 0
@@ -336,6 +333,9 @@ func ExportCmd(ctx *server.Context, cdc *codec.Codec) *cobra.Command {
 				fmt.Println(string(genesis))
 				return nil
 			}
+
+			sdkConfig := sdk.GetConfig()
+			sdkConfig.SetBech32PrefixForAccount(accPrefix, "bnbp")
 
 			db, err := openDB(home)
 			if err != nil {
