@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"time"
+	"bytes"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -87,6 +88,7 @@ func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) 
 	iterator := stakingKeeper.IteratorAllDelegations(sideChainCtx)
 	fmt.Println(delegationTitle())
 	for ; iterator.Valid(); iterator.Next() {
+		break
 		delegation := staketypes.MustUnmarshalDelegation(stakingKeeper.CDC(), iterator.Key(), iterator.Value())
 		if delegation.CrossStake {
 			ccDelegationCounter++
@@ -106,14 +108,46 @@ func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) 
 	swapStatus := map[swap.SwapStatus]int{}
 	swapKeeper := app.GetSwapKeeper()
 	swapIterator := swapKeeper.GetSwapIterator(ctx)
+	lastProcessedRefundSwapKey:=[]byte{}
+	cc:=0
 	for ; swapIterator.Valid(); swapIterator.Next() {
+		if len(lastProcessedRefundSwapKey) > 0 &&
+		bytes.Compare(swapIterator.Key(), lastProcessedRefundSwapKey) <= 0 {
+		// skip the processed swap
+		trace("skip processed swap:", fmt.Sprintf("%+v", swapIterator.Key()))
+		continue
+	}
+
+		if cc==100 {
+			break
+		}
+
 		var automaticSwap swap.AtomicSwap
 		swapKeeper.CDC().MustUnmarshalBinaryBare(swapIterator.Value(), &automaticSwap)
 		swapStatus[automaticSwap.Status]++
+		cc++
+		lastProcessedRefundSwapKey=swapIterator.Key()
+	}
+	swapIterator.Close()
+
+	for ; swapIterator.Valid(); swapIterator.Next() {
+		if len(lastProcessedRefundSwapKey) > 0 &&
+		bytes.Compare(swapIterator.Key(), lastProcessedRefundSwapKey) <= 0 {
+		// skip the processed swap
+		trace("skip processed swap:", fmt.Sprintf("%+v", swapIterator.Key()))
+		continue
+	}
+
+		var automaticSwap swap.AtomicSwap
+		swapKeeper.CDC().MustUnmarshalBinaryBare(swapIterator.Value(), &automaticSwap)
+		swapStatus[automaticSwap.Status]++
+		cc++
+		lastProcessedRefundSwapKey=swapIterator.Key()
 	}
 	swapIterator.Close()
 	trace("swap status:", fmt.Sprintf("%+v", swapStatus))
 
+	return nil
 	ccTokenCounter := 0
 	allowedTokens := make(map[string]struct{})
 	tokens := app.TokenMapper.GetTokenList(ctx, false, true)
