@@ -130,7 +130,7 @@ func ExportAccountsBalanceWithProof(app *app.BNBBeaconChain, outputPath string) 
 	}
 	swapIterator.Close()
 
-	swapIterator := swapKeeper.GetSwapIterator(ctx)
+	swapIterator = swapKeeper.GetSwapIterator(ctx)
 	for ; swapIterator.Valid(); swapIterator.Next() {
 		if len(lastProcessedRefundSwapKey) > 0 &&
 		bytes.Compare(swapIterator.Key(), lastProcessedRefundSwapKey) <= 0 {
